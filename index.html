@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Visor 3D - Ingeniería Civil</title>
+    <title>Visor 3D </title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #ffffff; }
         #info { 
@@ -43,8 +43,6 @@
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace; 
         document.body.appendChild(renderer.domElement);
 
-        // NOTA: Ya no necesitamos luces. MeshBasicMaterial no las usa.
-
         // 4. Controles
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -58,35 +56,28 @@
             loader.load(`./modelos/${nombreArchivo}`, function (gltf) {
                 const model = gltf.scene;
 
-                // --- EL SECRETO: FORZAR MATERIAL BÁSICO ---
                 model.traverse((child) => {
                     if (child.isMesh) {
-                        // Guardamos el color original que traía el archivo
                         const oldMat = child.material;
-                        
-                        // Detectamos si usa colores por vértices (como el mapa de calor)
-                        // o un color sólido (como los ejes)
                         const usaVertexColors = child.geometry.attributes.color ? true : false;
-
-                        // Creamos el nuevo material "inmune a la luz"
                         const newMat = new THREE.MeshBasicMaterial({
-                            color: oldMat.color,      // Mantiene el tinte base
-                            map: oldMat.map,          // Mantiene texturas si las hay
-                            vertexColors: usaVertexColors, // Mantiene los gradientes (rojo-azul)
-                            side: THREE.DoubleSide    // Se ve por ambos lados
+                            color: oldMat.color,
+                            map: oldMat.map,
+                            vertexColors: usaVertexColors,
+                            side: THREE.DoubleSide,
+                            transparent: true,         
+                            opacity: oldMat.opacity,   
+                            depthWrite: oldMat.transparent ? false : true 
                         });
                         
-                        // Reemplazamos el material viejo
                         child.material = newMat;
                     }
                 });
                 
-                // Centrar modelo
                 const box = new THREE.Box3().setFromObject(model);
                 const center = box.getCenter(new THREE.Vector3());
                 model.position.sub(center);
-                
-                // Rotar para corregir ejes si viene de Python/Colab
+
                 model.rotation.x = -Math.PI / 2;
 
                 scene.add(model);
@@ -113,4 +104,5 @@
         });
     </script>
 </body>
+
 </html>
