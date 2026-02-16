@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Visor 3D - Ingeniería Civil</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #ffffff; }
+        #info { 
+            position: absolute; top: 10px; width: 100%; text-align: center; 
+            font-family: 'Segoe UI', sans-serif; font-weight: bold; color: #333; 
+            pointer-events: none; user-select: none;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="info">Cargando figura...</div>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        // 1. Escena
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff); // Fondo blanco puro
+
+        // 2. Cámara
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 5, 5);
+
+        // 3. Renderizador
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        // Desactivamos la gestión de color compleja para que los colores sean directos
+        renderer.outputColorSpace = THREE.LinearSRGBColorSpace; 
+        document.body.appendChild(renderer.domElement);
+
+        // NOTA: Ya no necesitamos luces. MeshBasicMaterial no las usa.
+
+        // 4. Controles
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // 5. Cargar modelo
+        const params = new URLSearchParams(window.location.search);
+        const nombreArchivo = params.get('figura');
+        const loader = new GLTFLoader();
+
+        if (nombreArchivo) {
+            loader.load(`./modelos/${nombreArchivo}`, function (gltf) {
+                const model = gltf.scene;
+
+                // --- EL SECRETO: FORZAR MATERIAL BÁSICO ---
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        // Guardamos el color original que traía el archivo
+                        const oldMat = child.material;
+                        
+                        // Detectamos si usa colores por vértices (como el mapa de calor)
+                        // o un color sólido (como los ejes)
+                        const usaVertexColors = child.geometry.attributes.color ? true : false;
+
+                        // Creamos el nuevo material "inmune a la luz"
+                        const newMat = new THREE.MeshBasicMaterial({
+                            color: oldMat.color,      // Mantiene el tinte base
+                            map: oldMat.map,          // Mantiene texturas si las hay
+                            vertexColors: usaVertexColors, // Mantiene los gradientes (rojo-azul)
+                            side: THREE.DoubleSide    // Se ve por ambos lados
+                        });
+                        
+                        // Reemplazamos el material viejo
+                        child.material = newMat;
+                    }
+                });
+                
+                // Centrar modelo
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                model.position.sub(center);
+                
+                // Rotar para corregir ejes si viene de Python/Colab
+                model.rotation.x = -Math.PI / 2;
+
+                scene.add(model);
+                document.getElementById('info').innerText = `Visualizando: ${nombreArchivo}`;
+            }, undefined, function (error) {
+                console.error(error);
+                document.getElementById('info').innerText = "Error cargando " + nombreArchivo;
+            });
+        } else {
+            document.getElementById('info').innerText = "Listo. Usa ?figura=archivo.glb";
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
